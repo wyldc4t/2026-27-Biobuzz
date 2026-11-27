@@ -5,6 +5,8 @@ import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.util.Range;
@@ -327,7 +329,7 @@ public class Turret extends OpMode {
         // 4. The motor's own (stock) position PID does the work: hand it the target in encoder ticks.
         if (!stockPidActive) configureStockPid();
         else pushStockGains();
-        turret.setTargetPosition((int) TurretInitializer.ticksForAngle(turret, zeroTicks, targetAngle));
+        turret.setTargetPosition((int) ticksForAngle(targetAngle));
         turret.setPower(RobotConfig.TURRET_MAX_POWER);
         turretPower = turret.getPower();
     }

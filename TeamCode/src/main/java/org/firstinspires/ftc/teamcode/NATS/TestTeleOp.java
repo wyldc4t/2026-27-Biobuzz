@@ -105,7 +105,7 @@ public class TestTeleOp extends OpMode {
         // ---- Flywheel: on/off + adjustable target RPM ----
         if (gamepad1.right_bumper && !prevRightBumper) flywheelOn = !flywheelOn;
         if (gamepad1.dpad_up && !prevUp) {
-            targetRpm = Math.min(RobotConfig.SHOOTER_MAX_RPM, targetRpm + RobotConfig.RPM_STEP);
+            targetRpm += RobotConfig.RPM_STEP;
         }
         if (gamepad1.dpad_down && !prevDown) {
             targetRpm = Math.max(0, targetRpm - RobotConfig.RPM_STEP);

@@ -6,7 +6,10 @@ import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
 import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.util.Range;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Servo;
 
 //6/11/26  11:04AM
 ;
@@ -15,12 +18,10 @@ import com.qualcomm.robotcore.util.Range;
 public class MainTeleOp extends OpMode {
 
     private Turret turret;
-    private ShooterMechanism shooter;
+    private Shooter shooter;
     private ShooterRegression regression;
-    private IntakeMechanism intake;
-    private StopperMechanism stopper;
-    private FlowerMechanism flower;
-    private PivotMechanism pivot;
+    private DcMotorEx intake1, intake2;
+    private Servo stopper, flower, pivotLeft, pivotRight;
 
     private boolean feedLatched = false;
     private double shootHoldUntil = 0;   // time (s) until which both intake motors keep running after a shot
@@ -47,21 +48,28 @@ public class MainTeleOp extends OpMode {
         turret.updateTelemetry = false;
         turret.init();
 
-        shooter = new ShooterMechanism();
+        shooter = new Shooter();
         shooter.init(hardwareMap);
         regression = new ShooterRegression(RobotConfig.REGRESSION_DEGREE);
 
-        intake = new IntakeMechanism();
-        intake.init(hardwareMap);
+        intake1 = hardwareMap.get(DcMotorEx.class, RobotConfig.INTAKE_MOTOR_1);
+        intake2 = hardwareMap.get(DcMotorEx.class, RobotConfig.INTAKE_MOTOR_2);
+        intake1.setDirection(RobotConfig.INTAKE_MOTOR_1_REVERSED ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
+        intake2.setDirection(RobotConfig.INTAKE_MOTOR_2_REVERSED ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
+        intake1.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        intake2.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        intake1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        intake2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        intake1.setPower(0);
+        intake2.setPower(0);
 
-        stopper = new StopperMechanism();
-        stopper.init(hardwareMap);
-
-        flower = new FlowerMechanism();
-        flower.init(hardwareMap);
-
-        pivot = new PivotMechanism();
-        pivot.init(hardwareMap);
+        stopper = hardwareMap.get(Servo.class, RobotConfig.STOP_SERVO);
+        flower = hardwareMap.get(Servo.class, RobotConfig.FLOWER_SERVO);
+        stopper.setPosition(RobotConfig.STOP_BLOCKING);
+        flower.setPosition(RobotConfig.FLOWER_UP);
+        pivotLeft = hardwareMap.tryGet(Servo.class, RobotConfig.PIVOT_SERVO_LEFT);
+        pivotRight = hardwareMap.tryGet(Servo.class, RobotConfig.PIVOT_SERVO_RIGHT);
+        setPivot(RobotConfig.PIVOT_UP);
 
         telemetry.addLine("Main TeleOp Initialized.");
         telemetry.update();
@@ -109,8 +117,8 @@ public class MainTeleOp extends OpMode {
         }
         if (regression.getRequestedDegree() != RobotConfig.REGRESSION_DEGREE) regression.refit(RobotConfig.REGRESSION_DEGREE);
         if (autoRpm) {
-            commandedRpm = regression.predict(lastX, lastY, turret.getGoalX(), turret.getGoalY(), !turret.isRedAlliance(), shooter.getVoltage(), RobotConfig.SHOOTER_MIN_RPM, RobotConfig.SHOOTER_MAX_RPM) + rpmTrim;
-            commandedRpm = Math.max(0, Math.min(RobotConfig.SHOOTER_MAX_RPM, commandedRpm));
+            commandedRpm = regression.predict(lastX, lastY, turret.getGoalX(), turret.getGoalY(), !turret.isRedAlliance(), shooter.getVoltage(), RobotConfig.SHOOTER_MIN_RPM, Double.MAX_VALUE) + rpmTrim;
+            commandedRpm = Math.max(0, commandedRpm);
         } else {
             commandedRpm = RobotConfig.SHOOTER_TARGET_RPM;
         }
@@ -132,34 +140,40 @@ public class MainTeleOp extends OpMode {
         boolean shootTail = !shooting && nowShoot < shootHoldUntil;
 
         // Intake state machine
+        double intakePower;
         if (gamepad1.a) {
-            intake.setState(IntakeMechanism.State.INTAKE);
+            intakePower = RobotConfig.INTAKE_POWER;
         } else if (gamepad1.left_bumper) {
-            intake.setState(IntakeMechanism.State.OUTTAKE);
+            intakePower = RobotConfig.OUTTAKE_POWER;
             shootHoldUntil = 0;
         } else if (gamepad1.right_trigger > 0.05 || gamepad1.left_trigger > 0.05) {
-            double power = (gamepad1.right_trigger - gamepad1.left_trigger) * RobotConfig.INTAKE_POWER;
-            intake.setManualPower(power);
-            intake.setState(IntakeMechanism.State.MANUAL);
+            intakePower = (gamepad1.right_trigger - gamepad1.left_trigger) * RobotConfig.INTAKE_POWER;
             if (!shooting) shootHoldUntil = 0;
         } else if (shooting || shootTail) {
-            intake.setState(IntakeMechanism.State.INTAKE);
+            intakePower = RobotConfig.INTAKE_POWER;
         } else {
-            intake.setState(IntakeMechanism.State.STOPPED);
+            intakePower = 0;
         }
+        intake1.setPower(intakePower);
+        intake2.setPower(intakePower);
 
         // ---- Stop Servo: open only while shooting ----
-        stopper.setPosition(shooting || shootTail ? StopperMechanism.Position.OPEN : StopperMechanism.Position.BLOCKING);
+        stopper.setPosition(shooting || shootTail ? RobotConfig.STOP_DOWN : RobotConfig.STOP_BLOCKING);
 
         // ---- Flower Servo: controller 1 dpad-left toggles up <-> down ----
         if (gamepad1.dpad_left && !prevLeft) {
             flowerIsDown = !flowerIsDown;
-            flower.setPreset(flowerIsDown ? FlowerMechanism.Preset.DOWN : FlowerMechanism.Preset.UP);
+            flowerPos = flowerIsDown ? RobotConfig.FLOWER_DOWN : RobotConfig.FLOWER_UP;
+            flower.setPosition(flowerPos);
         }
         // Controller 2 bumpers fine-adjust the flower
         double flowerDir = turret.isCornerMode() ? 0 : (gamepad2.right_bumper ? 1 : 0) - (gamepad2.left_bumper ? 1 : 0);
         if (flowerDir != 0) {
-            flower.fineAdjust((int) flowerDir, dt);
+            double lo = Math.min(RobotConfig.FLOWER_UP, RobotConfig.FLOWER_DOWN);
+            double hi = Math.max(RobotConfig.FLOWER_UP, RobotConfig.FLOWER_DOWN);
+            double upDirection = Math.signum(RobotConfig.FLOWER_UP - RobotConfig.FLOWER_DOWN);
+            flowerPos = Math.max(lo, Math.min(hi, flowerPos + flowerDir * upDirection * RobotConfig.FLOWER_ADJUST_PER_SEC * dt));
+            flower.setPosition(flowerPos);
         }
 
         // ---- Pivot: auto-managed by intake state (optional - can add button control) ----
@@ -173,22 +187,32 @@ public class MainTeleOp extends OpMode {
         telemetry.addData("Shot X / Y / dist to goal (in)", "%.1f / %.1f / %.1f", lastX, lastY, lastDistance);
         telemetry.addData("RPM Fit", "deg %d, R2 %.3f, %s",
                 regression.getDegreeUsed(), regression.getRSquared(), regression.describeSamples());
-        shooter.addTelemetry(telemetry);
+        telemetry.addData("Shooter RPM", "%.0f / %.0f", shooter.getRpm(), shooter.getTargetRpm());
+        telemetry.addData("Battery (V)", "%.2f", shooter.getVoltage());
         telemetry.addData("Voltage effect", regression.describeVoltageEffect());
-        intake.addTelemetry(telemetry);
-        stopper.addTelemetry(telemetry);
-        flower.addTelemetry(telemetry);
+        telemetry.addData("Shooter At Speed", shooter.atSpeed());
+        telemetry.addData("Dip boost", shooter.isRecovering());
+        telemetry.addData("Intake motors", "%.2f / %.2f", intake1.getPower(), intake2.getPower());
+        telemetry.addData("Stop / flower", "%.2f / %.2f", stopper.getPosition(), flower.getPosition());
         telemetry.addData("Loop MS", "%.1f", dt * 1000);
         telemetry.update();
+    }
+
+    private void setPivot(double position) {
+        if (pivotLeft != null) pivotLeft.setPosition(position);
+        if (pivotRight != null) {
+            pivotRight.setPosition(RobotConfig.PIVOT_RIGHT_REVERSED ? 1.0 - position : position);
+        }
     }
 
     @Override
     public void stop() {
         turret.stop();
         shooter.stop();
-        intake.stop();
-        stopper.stop();
-        flower.stop();
-        pivot.stop();
+        intake1.setPower(0);
+        intake2.setPower(0);
+        stopper.setPosition(RobotConfig.STOP_BLOCKING);
+        if (pivotLeft != null) pivotLeft.setPosition(RobotConfig.PIVOT_UP);
+        if (pivotRight != null) pivotRight.setPosition(RobotConfig.PIVOT_RIGHT_REVERSED ? 1.0 - RobotConfig.PIVOT_UP : RobotConfig.PIVOT_UP);
     }
 }

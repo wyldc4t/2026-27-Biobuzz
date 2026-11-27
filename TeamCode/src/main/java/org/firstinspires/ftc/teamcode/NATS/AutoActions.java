@@ -242,18 +242,18 @@ public class AutoActions {
 
     /** Spin the flywheel at a fixed RPM. */
     public void spinUp(double rpm) {
-        commandedRpm = Math.max(0, Math.min(RobotConfig.SHOOTER_MAX_RPM, rpm));
+        commandedRpm = Math.max(0, rpm);
         shooter.setTargetRpm(commandedRpm);
     }
 
     /** Spin the flywheel to the RPM the shot table (field X, Y) wants at the current pose. */
     public void spinUpForDistance() {
-        spinUp(regression.predict(poseX, poseY, targetX, targetY, !turret.isRedAlliance(), shooter.getVoltage(), RobotConfig.SHOOTER_MIN_RPM, RobotConfig.SHOOTER_MAX_RPM));
+        spinUp(regression.predict(poseX, poseY, targetX, targetY, !turret.isRedAlliance(), shooter.getVoltage(), RobotConfig.SHOOTER_MIN_RPM, Double.MAX_VALUE));
     }
 
     /** Same, plus rpmOffset (negative = slower). Only the autos that pass an offset are affected. */
     public void spinUpForDistance(double rpmOffset) {
-        spinUp(regression.predict(poseX, poseY, targetX, targetY, !turret.isRedAlliance(), shooter.getVoltage(), RobotConfig.SHOOTER_MIN_RPM, RobotConfig.SHOOTER_MAX_RPM) + rpmOffset);
+        spinUp(regression.predict(poseX, poseY, targetX, targetY, !turret.isRedAlliance(), shooter.getVoltage(), RobotConfig.SHOOTER_MIN_RPM, Double.MAX_VALUE) + rpmOffset);
     }
 
     public void spinDown() {

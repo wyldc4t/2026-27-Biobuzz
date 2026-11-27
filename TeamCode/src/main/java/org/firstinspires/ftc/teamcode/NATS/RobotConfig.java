@@ -168,11 +168,11 @@ public class RobotConfig {
     public static double SHOOTER_TARGET_RPM = 2000;
 
     // ---- Velocity PIDF (used by Shooter, written by ShooterAutoTune) ----
-    public static double SHOOTER_kP = 0.00279;    // power per RPM of error
+    public static double SHOOTER_kP = 0.00241;    // power per RPM of error
     public static double SHOOTER_kI = 0.00000;    // 0: P + D + feedforward hold the speed, no wind-up
-    public static double SHOOTER_kD = 0.00024;
-    public static double SHOOTER_kV = 0.000344;   // power per RPM  (~1 / 3333 at 12 V)
-    public static double SHOOTER_kS = 0.12706;    // static offset power while target > 0
+    public static double SHOOTER_kD = 0.00003;
+    public static double SHOOTER_kV = 0.00000;   // power per RPM  (~1 / 3333 at 12 V)
+    public static double SHOOTER_kS = 0.00000;    // static offset power while target > 0
     public static double SHOOTER_I_LIMIT_POWER = 0.25;
     public static double SHOOTER_NOMINAL_VOLTAGE = 12.0;
 
